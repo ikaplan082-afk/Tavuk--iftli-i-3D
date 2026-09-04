@@ -1,48 +1,383 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Tavuk Çiftliği 3D</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1a2b1e;font-family:Arial,sans-serif;color:#fff}
+#game-container{width:100%;height:100%;position:absolute;inset:0}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5;opacity:0;transition:opacity 0.8s}
+.top{position:absolute;top:max(10px,env(safe-area-inset-top));left:10px;right:10px;display:flex;gap:7px;flex-wrap:wrap}
+.stat{background:rgba(19,33,27,0.85);border:1px solid rgba(255,255,255,0.2);border-radius:14px;padding:8px 12px;font-weight:bold;font-size:14px;backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,0.3)}
+.actions{position:absolute;right:12px;bottom:max(18px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;pointer-events:auto}
+button{border:1px solid rgba(255,255,255,0.3);border-radius:14px;padding:12px 16px;background:#2e7140;color:#fff;font-size:14px;font-weight:bold;box-shadow:0 5px 15px rgba(0,0,0,0.4);cursor:pointer}
+button:active{transform:scale(.96)}
+#breedBtn{background:#9a3d39}
+.rounds{position:absolute;left:150px;bottom:max(20px,env(safe-area-inset-bottom));display:flex;gap:8px;pointer-events:auto}
+.round{width:64px;height:64px;border-radius:50%;padding:4px;background:rgba(23,36,29,0.85);font-size:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.round span{font-size:20px}
+#joystick{position:absolute;left:18px;bottom:max(20px,env(safe-area-inset-bottom));width:120px;height:120px;border-radius:50%;background:rgba(16,32,25,0.4);border:2px solid rgba(255,255,255,0.5);pointer-events:auto}
+#stick{position:absolute;width:50px;height:50px;border-radius:50%;left:33px;top:33px;background:rgba(244,244,237,0.8);border:2px solid #fff;box-shadow:0 3px 12px rgba(0,0,0,0.4)}
+.panel{display:none;position:fixed;z-index:20;left:50%;top:50%;transform:translate(-50%,-50%);width:min(94vw,550px);max-height:80vh;overflow:auto;background:#f7f5ed;color:#17231c;border-radius:20px;padding:16px;box-shadow:0 20px 70px rgba(0,0,0,0.6)}
+.panel h2{margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.card{background:#e9efe4;border:1px solid #c8d3c4;border-radius:15px;padding:10px}
+.card h3{margin:0 0 5px;font-size:15px}
+.card p{font-size:11px;margin:5px 0;color:#4d5c50}
+.card button{width:100%;padding:8px;margin-top:5px;background:#2d713e}
+.close{width:100%;background:#333;margin-top:12px}
+.toast{display:none;position:fixed;z-index:30;top:80px;left:50%;transform:translateX(-50%);background:rgba(19,33,27,0.9);color:#fff;padding:10px 16px;border-radius:12px;font-weight:bold;box-shadow:0 6px 20px rgba(0,0,0,0.3)}
+.help{position:absolute;left:50%;top:55px;transform:translateX(-50%);font-size:12px;background:rgba(18,32,23,0.7);border-radius:10px;padding:5px 12px;text-align:center}
+#startOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;display:flex;flex-direction:column;justify-content:center;align-items:center;backdrop-filter:blur(6px);transition:opacity 0.8s}
+#startOverlay h1{font-size:36px;margin-bottom:8px;text-shadow:0 4px 12px #000}
+#startOverlay p{font-size:14px;margin-bottom:24px;color:#ddd}
+#startBtn{font-size:18px;padding:14px 40px;background:#44a059;border:none;border-radius:30px;color:white;font-weight:bold;box-shadow:0 6px 20px rgba(0,0,0,0.4);cursor:pointer}
+@media(max-width:620px){.stat{font-size:11px;padding:6px 8px}.rounds{left:140px}.round{width:52px;height:52px;font-size:8px}.round span{font-size:16px}.actions button{padding:10px 12px}}
+</style>
+<!-- Three.js Kütüphanesi -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
 
-'use strict';
-const canvas=document.getElementById('game'),gl=canvas.getContext('webgl',{antialias:true});if(!gl){document.body.innerHTML='<h2 style="padding:30px">Tarayıcınız WebGL desteklemiyor.</h2>';throw new Error('WebGL yok')}
-let W,H;function resize(){W=canvas.width=innerWidth*devicePixelRatio;H=canvas.height=innerHeight*devicePixelRatio;gl.viewport(0,0,W,H)}addEventListener('resize',resize);resize();
-const VS='attribute vec3 p;attribute vec3 col;uniform mat4 mvp;varying vec3 v;void main(){gl_Position=mvp*vec4(p,1.0);v=col;}';const FS='precision mediump float;varying vec3 v;void main(){gl_FragColor=vec4(v,1.0);}';
-function sh(t,s){let q=gl.createShader(t);gl.shaderSource(q,s);gl.compileShader(q);return q}let prog=gl.createProgram();gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);gl.useProgram(prog);let ap=gl.getAttribLocation(prog,'p'),ac=gl.getAttribLocation(prog,'col'),um=gl.getUniformLocation(prog,'mvp');
-function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}function mm(a,b){let r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[i*4+j]=a[i*4]*b[j]+a[i*4+1]*b[4+j]+a[i*4+2]*b[8+j]+a[i*4+3]*b[12+j];return r}function T(x,y,z){let m=I();m[12]=x;m[13]=y;m[14]=z;return m}function S(x,y,z){let m=I();m[0]=x;m[5]=y;m[10]=z;return m}function RY(a){let c=Math.cos(a),s=Math.sin(a);return new Float32Array([c,0,-s,0,0,1,0,0,s,0,c,0,0,0,0,1])}function P(f,a,n,fa){let t=1/Math.tan(f/2),m=new Float32Array(16);m[0]=t/a;m[5]=t;m[10]=(fa+n)/(n-fa);m[11]=-1;m[14]=2*fa*n/(n-fa);return m}function look(e,t){let z=[e[0]-t[0],e[1]-t[1],e[2]-t[2]],l=Math.hypot(...z);z=z.map(v=>v/l);let x=[z[2],0,-z[0]],xl=Math.hypot(...x);x=x.map(v=>v/xl);let y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]],m=I();m[0]=x[0];m[1]=y[0];m[2]=z[0];m[4]=x[1];m[5]=y[1];m[6]=z[1];m[8]=x[2];m[9]=y[2];m[10]=z[2];m[12]=-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]);m[13]=-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]);m[14]=-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]);return m}
-const cv=[[-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]],fc=[[0,1,2,3],[4,7,6,5],[0,4,5,1],[3,2,6,7],[1,5,6,2],[0,3,7,4]];function box(base,x,y,z,sx,sy,sz,colors,rot=0){let p=[],c=[];fc.forEach((f,i)=>{let col=colors[i%colors.length];for(let k of [0,1,2,0,2,3]){let q=cv[f[k]];p.push(q[0],q[1],q[2]);c.push(...col)}});let pb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,pb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(p),gl.STATIC_DRAW);gl.vertexAttribPointer(ap,3,gl.FLOAT,false,0,0);gl.enableVertexAttribArray(ap);let cb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,cb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(c),gl.STATIC_DRAW);gl.vertexAttribPointer(ac,3,gl.FLOAT,false,0,0);gl.enableVertexAttribArray(ac);let m=mm(base,T(x,y,z));m=mm(m,RY(rot));m=mm(m,S(sx,sy,sz));gl.uniformMatrix4fv(um,false,m);gl.drawArrays(gl.TRIANGLES,0,p.length/3)}
-const C={grass:[[.31,.56,.22],[.27,.50,.18],[.36,.62,.25]],wood:[[.45,.25,.10],[.56,.34,.15],[.37,.20,.07]],dark:[[.12,.12,.12],[.16,.16,.16],[.09,.09,.09]],white:[[.93,.91,.84],[.8,.79,.73],[1,.98,.91]],red:[[.64,.18,.08],[.82,.25,.10],[.45,.10,.04]],gold:[[.85,.53,.12],[.95,.66,.18],[.65,.37,.06]]};
-const breeds={
- 'Lohman Brown':{sex:'f',price:90,egg:1.35,size:1,color:[[.55,.25,.08],[.72,.37,.13],[.42,.17,.05]],desc:'Yüksek yumurta verimi, kahverengi tüy.'},
- 'Australorp':{sex:'f',price:120,egg:1.25,size:1.05,color:[[.07,.08,.07],[.13,.15,.14],[.03,.03,.03]],desc:'Siyah, parlak görünümlü ve dayanıklı.'},
- 'Sussex':{sex:'f',price:110,egg:1.1,size:1.05,color:[[.92,.89,.80],[.25,.23,.20],[.98,.96,.88]],desc:'Benekli görünüm, çift amaçlı.'},
- 'Rhode Island Red':{sex:'f',price:130,egg:1.2,size:1.1,color:[[.63,.20,.07],[.78,.29,.10],[.42,.12,.04]],desc:'Kızıl kahverengi, güçlü ırk.'},
- 'Brahma':{sex:'f',price:180,egg:.9,size:1.35,color:[[.88,.82,.68],[.22,.18,.12],[.96,.91,.76]],desc:'Büyük yapılı, et verimi yüksek.'},
- 'Cochin':{sex:'f',price:200,egg:.8,size:1.4,color:[[.70,.46,.14],[.90,.65,.20],[.55,.31,.08]],desc:'Kabarık tüylü, gösterişli ırk.'},
- 'Leghorn':{sex:'f',price:140,egg:1.5,size:.95,color:C.white,desc:'Beyaz renkli, çok yüksek yumurta verimi.'},
- 'Kızıl Horoz':{sex:'m',price:160,egg:0,size:1.18,color:[[.72,.16,.03],[.95,.32,.04],[.14,.23,.16]],desc:'Renkli kuyruklu damızlık horoz.'},
- 'Siyah Horoz':{sex:'m',price:150,egg:0,size:1.15,color:[[.05,.05,.05],[.12,.16,.14],[.02,.02,.02]],desc:'Koyu tüylü güçlü damızlık horoz.'}
+<div id="game-container"></div>
+
+<div id="startOverlay">
+  <h1>🐔 ÇİFTLİK 3D</h1>
+  <p>Gelişmiş Çiftlik Simülasyonu</p>
+  <button id="startBtn">OYUNA BAŞLA</button>
+</div>
+
+<div id="hud">
+  <div class="top">
+    <div class="stat">💰 <span id="money">500</span> ₺</div>
+    <div class="stat">🐔 Dişi: <span id="fem">1</span></div>
+    <div class="stat">🐓 Horoz: <span id="male">0</span></div>
+    <div class="stat">🥚 Yumurta: <span id="eggs">0</span></div>
+    <div class="stat">🌾 Yem: <span id="feed">100</span></div>
+  </div>
+  <div class="help">Marketten tavuk al • Yumurtaları topla ve sat</div>
+  <div class="actions">
+    <button id="marketBtn">🛒 MARKET</button>
+    <button id="breedBtn">❤️ ÇİFTLEŞTİR</button>
+  </div>
+  <div class="rounds">
+    <button class="round" id="feedBtn"><span>🌾</span>YEM VER</button>
+    <button class="round" id="collectBtn"><span>🥚</span>TOPLA</button>
+  </div>
+  <div id="joystick"><div id="stick"></div></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<div id="market" class="panel">
+  <h2>🐔 Canlı Tavuk Pazarı</h2>
+  <div class="grid" id="breedGrid"></div>
+  <div class="card" style="margin-top:10px;">
+    <h3>🌾 50 Yem Stock</h3>
+    <p>Çiftlik yem stoğunu artırır.</p>
+    <button id="buyFeedBtn">25 ₺ Satın Al</button>
+  </div>
+  <button class="close" id="closeMarketBtn">MARKETİ KAPAT</button>
+</div>
+
+<script>
+// --- Three.js Kurulumu ---
+const container = document.getElementById('game-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb); // Gökyüzü Mavisi
+scene.fog = new THREE.Fog(0x87ceeb, 20, 50);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+container.appendChild(renderer.domElement);
+
+// Işıklandırma
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(20, 40, 20);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+scene.add(dirLight);
+
+// --- Çevre Mantığı ---
+// Çim Zemin
+const groundGeo = new THREE.PlaneGeometry(60, 60);
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x4e8d38 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Çitler
+function createFence() {
+  const fenceMat = new THREE.MeshLambertMaterial({ color: 0x7c4c23 });
+  for(let i = -20; i <= 20; i += 4) {
+    [-20, 20].forEach(z => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 0.3), fenceMat);
+      p.position.set(i, 0.75, z);
+      scene.add(p);
+      const h = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 0.1), fenceMat);
+      h.position.set(i, 1, z);
+      scene.add(h);
+    });
+  }
+}
+createFence();
+
+// Kümes
+const coopGroup = new THREE.Group();
+const coopBody = new THREE.Mesh(new THREE.BoxGeometry(4, 2.5, 3), new THREE.MeshLambertMaterial({ color: 0x8b4513 }));
+coopBody.position.y = 1.25;
+coopBody.castShadow = true;
+coopGroup.add(coopBody);
+
+const coopRoof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 1.5, 4), new THREE.MeshLambertMaterial({ color: 0xa52a2a }));
+coopRoof.position.y = 3.25;
+coopRoof.rotation.y = Math.PI / 4;
+coopGroup.add(coopRoof);
+coopGroup.position.set(-8, 0, -8);
+scene.add(coopGroup);
+
+// --- Oyuncu (Karakter) ---
+const playerGroup = new THREE.Group();
+const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.4, 0.5), new THREE.MeshLambertMaterial({ color: 0x2b529a }));
+bodyMesh.position.y = 0.7;
+bodyMesh.castShadow = true;
+playerGroup.add(bodyMesh);
+
+const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshLambertMaterial({ color: 0xffdbac }));
+headMesh.position.y = 1.65;
+playerGroup.add(headMesh);
+scene.add(playerGroup);
+
+// --- Durum ve Tavuk Mantığı ---
+let state = { money: 500, feed: 100, eggs: 0 };
+const breeds = {
+ 'Lohman Brown': { sex: 'f', price: 90, color: 0xb25329, desc: 'Yüksek yumurta verimi.' },
+ 'Australorp': { sex: 'f', price: 120, color: 0x222222, desc: 'Siyah cins, dayanıklı.' },
+ 'Leghorn': { sex: 'f', price: 140, color: 0xf0f0f0, desc: 'Beyaz hafif tavuk.' },
+ 'Kızıl Horoz': { sex: 'm', price: 160, color: 0xd33f11, desc: 'Çiftleşme için horoz.' }
 };
-let state={money:500,feed:100,eggs:0,totalEggs:0};let chickens=[];let defaultSave={state,chickens};try{let x=JSON.parse(localStorage.getItem('farm3dPro'));if(x){state=x.state||state;chickens=x.chickens||[]}}catch(e){}if(!chickens.length)chickens=[spawn('Lohman Brown',0,1)];
-function spawn(b,x,z){let d=breeds[b];return {breed:b,sex:d.sex,x:x??(Math.random()*12-6),z:z??(Math.random()*10-4),a:Math.random()*6.28,tx:0,tz:0,turn:0,phase:Math.random()*6.28,hunger:0,eggTimer:18+Math.random()*30}}
-function save(){localStorage.setItem('farm3dPro',JSON.stringify({state,chickens}))}function counts(){return {f:chickens.filter(x=>x.sex==='f').length,m:chickens.filter(x=>x.sex==='m').length}}function ui(){let q=counts();money.textContent=Math.floor(state.money);feed.textContent=Math.floor(state.feed);eggs.textContent=state.eggs;fem.textContent=q.f;male.textContent=q.m}
-function toast(s){let t=document.getElementById('toast');t.textContent=s;t.style.display='block';clearTimeout(window._tt);window._tt=setTimeout(()=>t.style.display='none',1900)}ui();
-const grid=document.getElementById('breedGrid');Object.entries(breeds).forEach(([n,b])=>{let d=document.createElement('div');d.className='card';d.innerHTML=`<h3>${b.sex==='f'?'🐔':'🐓'} ${n}</h3><p>${b.desc}</p><p>Verim: ${b.egg||'Damızlık'} • Boyut: ${b.size}</p><button>${b.price} ₺ satın al</button>`;d.querySelector('button').onclick=()=>buyBreed(n);grid.appendChild(d)});
-function buyBreed(n){let b=breeds[n];if(state.money<b.price)return toast('❌ Yeterli paran yok');state.money-=b.price;chickens.push(spawn(n));ui();save();toast((b.sex==='f'?'🐔 ':'🐓 ')+n+' çiftliğe geldi!')}
-marketBtn.onclick=()=>market.style.display='block';document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{market.style.display='none';info.style.display='none'});document.querySelector('[data-feed]').onclick=()=>{if(state.money<25)return toast('❌ Yeterli paran yok');state.money-=25;state.feed+=50;ui();save();toast('🌾 50 yem eklendi')};
-feedBtn.onclick=()=>{if(state.feed<5)return toast('Yem stoğun yetersiz');state.feed-=5;chickens.forEach(c=>{c.hunger=Math.max(0,c.hunger-45);c.tx=Math.random()*8-4;c.tz=Math.random()*4-2});ui();save();toast('🌾 Tavuklara yem verildi')};collectBtn.onclick=()=>{if(!state.eggs)return toast('Toplanacak yumurta yok');let gain=state.eggs*12;state.money+=gain;state.totalEggs+=state.eggs;toast(`🥚 ${state.eggs} yumurta satıldı: +${gain} ₺`);state.eggs=0;ui();save()};
-breedBtn.onclick=()=>{let q=counts();if(q.f<1||q.m<1)return toast('Önce en az 1 tavuk ve 1 horoz gerekli');if(state.feed<8)return toast('Çiftleşme için 8 yem gerekli');state.feed-=8;let female=chickens.find(c=>c.sex==='f');let pool=Object.keys(breeds).filter(k=>breeds[k].sex==='f');let baby=Math.random()<.72?female.breed:pool[Math.floor(Math.random()*pool.length)];chickens.push(spawn(baby,female.x+Math.random()*2-1,female.z+Math.random()*2-1));toast('❤️ Çiftleşme başarılı! Yeni civciv büyütüldü.');ui();save()};
-let px=0,pz=7,joy={x:0,y:0,down:false};const js=document.getElementById('joystick'),st=document.getElementById('stick');function jm(e){let r=js.getBoundingClientRect(),x=e.clientX-r.left-63,y=e.clientY-r.top-63,d=Math.min(48,Math.hypot(x,y)),a=Math.atan2(y,x);joy.x=Math.cos(a)*d/48;joy.y=Math.sin(a)*d/48;st.style.left=(36+joy.x*35)+'px';st.style.top=(36+joy.y*35)+'px'}js.addEventListener('pointerdown',e=>{joy.down=true;js.setPointerCapture(e.pointerId);jm(e)});js.addEventListener('pointermove',e=>joy.down&&jm(e));function ju(){joy.down=false;joy.x=joy.y=0;st.style.left='34px';st.style.top='34px'}js.addEventListener('pointerup',ju);js.addEventListener('pointercancel',ju);
-function drawChicken(base,c,t){let b=breeds[c.breed],s=b.size,walk=Math.sin(t*7+c.phase)*.05,ang=c.a;let col=b.color; // body
-box(base,c.x,.36*s,c.z,.42*s,.30*s,.58*s,col,ang);let hx=c.x+Math.sin(ang)*.48*s,hz=c.z+Math.cos(ang)*.48*s;box(base,hx,.64*s+walk,hz,.22*s,.22*s,.22*s,col,ang); // beak
-let bx=c.x+Math.sin(ang)*.72*s,bz=c.z+Math.cos(ang)*.72*s;box(base,bx,.62*s,bz,.09*s,.06*s,.12*s,C.gold,ang); // comb
-box(base,hx,.91*s+walk,hz,.08*s,.12*s,.14*s,C.red,ang); // tail
-let tx=c.x-Math.sin(ang)*.52*s,tz=c.z-Math.cos(ang)*.52*s;box(base,tx,.58*s,tz,.28*s,.45*s,.22*s,c.sex==='m'?C.dark:col,ang); // legs
-for(let side of [-1,1]){let lx=c.x+Math.cos(ang)*side*.16*s,lz=c.z-Math.sin(ang)*side*.16*s;box(base,lx,.10*s,lz,.035*s,.20*s,.035*s,C.gold,ang)}if(c.sex==='m'){box(base,tx,.85*s,tz,.20*s,.70*s,.14*s,[[.05,.16,.14],[.1,.28,.2],[.02,.07,.06]],ang)}}
-function updateAnimals(dt){for(let c of chickens){c.hunger+=dt*.25;c.eggTimer-=dt;if(c.turn<=0){c.tx=Math.random()*14-7;c.tz=Math.random()*9-4;c.turn=2+Math.random()*5}else c.turn-=dt;let dx=c.tx-c.x,dz=c.tz-c.z,dl=Math.hypot(dx,dz);if(dl>.15){c.a=Math.atan2(dx,dz);let sp=.28*(c.hunger>80?.65:1);c.x+=dx/dl*sp*dt;c.z+=dz/dl*sp*dt}if(c.sex==='f'&&c.eggTimer<=0&&c.hunger<95){let rate=breeds[c.breed].egg;c.eggTimer=48/rate+Math.random()*25;state.eggs++;toast('🥚 '+c.breed+' yumurtladı!');ui()}c.x=Math.max(-9,Math.min(9,c.x));c.z=Math.max(-8,Math.min(7,c.z))}}
-function scene(t){gl.enable(gl.DEPTH_TEST);gl.clearColor(.37,.64,.32,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);let base=mm(P(1.0,W/H,.1,100),look([px+8,7,pz+10],[px,0,pz]));box(base,0,-.7,0,12,.7,12,C.grass); // paths
-box(base,0,-.48,8,2,.03,4,[[.25,.22,.17],[.3,.28,.22]]); // barn
-box(base,-2,1.0,-1,3,1.8,2.2,C.wood);box(base,-2,2.8,-1,3.35,.30,2.5,C.red);box(base,-2,1.0,1.25,.7,1.0,.04,C.dark); // coop
-box(base,5,.7,-3,2.0,1.2,1.5,C.wood);box(base,5,2.0,-3,2.2,.22,1.75,C.red); // silo
-box(base,7,1.5,3,.65,2.0,.65,[[.55,.58,.57],[.7,.72,.7]]); // fences
-for(let i=-10;i<=10;i+=2.5){box(base,i,.5,-7,.07,.6,.07,C.wood);box(base,i,.5,7,.07,.6,.07,C.wood)}box(base,0,.55,-7,10,.04,.04,C.wood);box(base,0,.55,7,10,.04,.04,C.wood); // trees
-for(let i=-9;i<=9;i+=4.5){box(base,i,.6,-9,.20,.9,.20,C.wood);box(base,i,1.8,-9,1.0,1.0,1.0,[[.10,.38,.12],[.15,.48,.18],[.08,.30,.09]])}
-chickens.forEach(c=>drawChicken(base,c,t));box(base,px,.55,pz,.30,.65,.30,[[.08,.22,.78],[.12,.30,.9],[.05,.16,.55]],0)}
-let last=performance.now(),saveTick=0;function loop(now){let dt=Math.min(.05,(now-last)/1000);last=now;px+=joy.x*4*dt;pz+=joy.y*4*dt;px=Math.max(-10,Math.min(10,px));pz=Math.max(-9,Math.min(10,pz));updateAnimals(dt);scene(now/1000);saveTick+=dt;if(saveTick>8){save();saveTick=0}requestAnimationFrame(loop)}requestAnimationFrame(loop);
-canvas.addEventListener('click',()=>{});addEventListener('keydown',e=>{if(e.key==='m')market.style.display='block';if(e.key==='r'){localStorage.removeItem('farm3dPro');location.reload()}});
-</script></body></html>
+
+let chickens = [];
+
+function createChickenMesh(colorHex, isMale) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ color: colorHex });
+  
+  // Gövde
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.8), mat);
+  body.position.y = 0.35;
+  body.castShadow = true;
+  group.add(body);
+  
+  // İbik (Kırmızı)
+  const comb = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.3), new THREE.MeshLambertMaterial({ color: 0xcc1111 }));
+  comb.position.set(0, 0.7, 0.3);
+  group.add(comb);
+
+  if (isMale) group.scale.set(1.2, 1.2, 1.2);
+  return group;
+}
+
+function spawnChicken(breedName) {
+  const b = breeds[breedName];
+  const mesh = createChickenMesh(b.color, b.sex === 'm');
+  const x = (Math.random() - 0.5) * 15;
+  const z = (Math.random() - 0.5) * 15;
+  mesh.position.set(x, 0, z);
+  scene.add(mesh);
+  
+  chickens.push({
+    mesh: mesh,
+    sex: b.sex,
+    breed: breedName,
+    tx: x,
+    tz: z,
+    timer: Math.random() * 5,
+    eggTimer: 15 + Math.random() * 10
+  });
+}
+
+// Başlangıç tavuğu
+spawnChicken('Lohman Brown');
+
+// --- Arayüz Güncelleme ---
+function updateUI() {
+  document.getElementById('money').textContent = Math.floor(state.money);
+  document.getElementById('feed').textContent = Math.floor(state.feed);
+  document.getElementById('eggs').textContent = state.eggs;
+  document.getElementById('fem').textContent = chickens.filter(c => c.sex === 'f').length;
+  document.getElementById('male').textContent = chickens.filter(c => c.sex === 'm').length;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(window._tTimer);
+  window._tTimer = setTimeout(() => t.style.display = 'none', 2000);
+}
+
+// Market doldurma
+const grid = document.getElementById('breedGrid');
+Object.entries(breeds).forEach(([name, b]) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<h3>${b.sex === 'f' ? '🐔' : '🐓'} ${name}</h3><p>${b.desc}</p><button>${b.price} ₺ Satın Al</button>`;
+  card.querySelector('button').onclick = () => {
+    if (state.money >= b.price) {
+      state.money -= b.price;
+      spawnChicken(name);
+      updateUI();
+      toast(name + ' satın alındı!');
+    } else {
+      toast('Yetersiz bakiye!');
+    }
+  };
+  grid.appendChild(card);
+});
+
+// Buton Olayları
+document.getElementById('marketBtn').onclick = () => document.getElementById('market').style.display = 'block';
+document.getElementById('closeMarketBtn').onclick = () => document.getElementById('market').style.display = 'none';
+document.getElementById('buyFeedBtn').onclick = () => {
+  if (state.money >= 25) {
+    state.money -= 25;
+    state.feed += 50;
+    updateUI();
+    toast('50 Yem alındı!');
+  }
+};
+document.getElementById('feedBtn').onclick = () => {
+  if (state.feed >= 10) {
+    state.feed -= 10;
+    updateUI();
+    toast('🌾 Tavuklara yem saçıldı');
+  }
+};
+document.getElementById('collectBtn').onclick = () => {
+  if (state.eggs > 0) {
+    const earned = state.eggs * 15;
+    state.money += earned;
+    toast(`🥚 Yumurtalar satıldı: +${earned} ₺`);
+    state.eggs = 0;
+    updateUI();
+  } else {
+    toast('Toplanacak yumurta yok!');
+  }
+};
+document.getElementById('breedBtn').onclick = () => {
+  const fCount = chickens.filter(c => c.sex === 'f').length;
+  const mCount = chickens.filter(c => c.sex === 'm').length;
+  if (fCount > 0 && mCount > 0) {
+    spawnChicken('Lohman Brown');
+    toast('❤️ Yeni bir tavuk doğdu!');
+    updateUI();
+  } else {
+    toast('Çiftleştirme için en az 1 Horoz ve 1 Dişi lazım!');
+  }
+};
+
+document.getElementById('startBtn').onclick = () => {
+  const overlay = document.getElementById('startOverlay');
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.style.display = 'none', 800);
+  document.getElementById('hud').style.opacity = '1';
+};
+
+// --- Joystick Kontrolü ---
+let joy = { x: 0, y: 0, active: false };
+const js = document.getElementById('joystick'), st = document.getElementById('stick');
+
+function handleMove(e) {
+  const r = js.getBoundingClientRect();
+  const x = e.clientX - r.left - 60;
+  const y = e.clientY - r.top - 60;
+  const dist = Math.min(45, Math.hypot(x, y));
+  const angle = Math.atan2(y, x);
+  joy.x = (Math.cos(angle) * dist) / 45;
+  joy.y = (Math.sin(angle) * dist) / 45;
+  st.style.left = (35 + joy.x * 30) + 'px';
+  st.style.top = (35 + joy.y * 30) + 'px';
+}
+
+js.addEventListener('pointerdown', e => { joy.active = true; js.setPointerCapture(e.pointerId); handleMove(e); });
+js.addEventListener('pointermove', e => { if (joy.active) handleMove(e); });
+function endJoy() { joy.active = false; joy.x = 0; joy.y = 0; st.style.left = '33px'; st.style.top = '33px'; }
+js.addEventListener('pointerup', endJoy);
+js.addEventListener('pointercancel', endJoy);
+
+// --- Oyun Döngüsü ---
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  // Oyuncu Hareketi
+  if (joy.active) {
+    playerGroup.position.x += joy.x * 6 * dt;
+    playerGroup.position.z += joy.y * 6 * dt;
+    playerGroup.rotation.y = Math.atan2(-joy.x, -joy.y);
+    
+    // Sınırlar
+    playerGroup.position.x = Math.max(-18, Math.min(18, playerGroup.position.x));
+    playerGroup.position.z = Math.max(-18, Math.min(18, playerGroup.position.z));
+  }
+
+  // Kamera Takibi
+  camera.position.set(playerGroup.position.x, playerGroup.position.y + 10, playerGroup.position.z + 12);
+  camera.lookAt(playerGroup.position.x, playerGroup.position.y + 1, playerGroup.position.z);
+
+  // Tavukların Gezinmesi ve Yumurtlaması
+  chickens.forEach(c => {
+    c.timer -= dt;
+    if (c.timer <= 0) {
+      c.tx = (Math.random() - 0.5) * 20;
+      c.tz = (Math.random() - 0.5) * 20;
+      c.timer = 4 + Math.random() * 5;
+    }
+    
+    const dx = c.tx - c.mesh.position.x;
+    const dz = c.tz - c.mesh.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > 0.3) {
+      c.mesh.position.x += (dx / dist) * 1.2 * dt;
+      c.mesh.position.z += (dz / dist) * 1.2 * dt;
+      c.mesh.rotation.y = Math.atan2(dx, dz);
+    }
+
+    if (c.sex === 'f') {
+      c.eggTimer -= dt;
+      if (c.eggTimer <= 0) {
+        c.eggTimer = 20 + Math.random() * 10;
+        state.eggs++;
+        updateUI();
+        toast('🥚 Yeni yumurta yapıldı!');
+      }
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+
+// Ekran Yeniden Boyutlandırma
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+updateUI();
+animate();
+</script>
+</body>
+</html>
